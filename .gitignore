@@ -74,3 +74,6 @@ package-lock.json
 
 roms
 platform-tools
+**log**
+**Log**
+*.zip
