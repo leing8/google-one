@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -166,3 +167,117 @@ class AdbExecutor:
             msg = f"ADB 命令在 {effective_timeout} 秒后超时: {cmd_str}"
             logger.error(msg)
             raise AdbError(msg) from None
+
+    def reboot(self, target: str = "", timeout: int | None = None) -> AdbResult:
+        """重启设备到指定目标。
+
+        等同于：adb reboot [target]
+
+        对应抓包日志：
+        - 步骤 1: reboot:recovery  → reboot("recovery")
+        - 步骤 6: reboot:          → reboot()
+
+        参数:
+            target: 重启目标（"recovery", "bootloader", 等）。
+                    空字符串表示重启到系统。
+            timeout: 覆盖默认的超时时间（秒）。
+
+        返回:
+            包含捕获输出的 AdbResult。
+
+        抛出:
+            AdbError: 如果重启命令失败。
+        """
+        args = ["reboot", target] if target else ["reboot"]
+        return self._run(args, timeout=timeout)
+
+    def push(
+        self,
+        local_path: Path,
+        remote_path: str,
+        timeout: int | None = None,
+    ) -> AdbResult:
+        """推送本地文件到设备。
+
+        等同于：adb push <local> <remote>
+
+        对应抓包日志步骤 3: push → /sdcard/Magisk.zip
+
+        按照 Python 官方推荐：
+        - 使用 pathlib.Path 进行路径操作
+        - 使用 Path.exists() 进行文件存在性校验
+        - 使用参数列表避免路径中空格导致的问题
+
+        参数:
+            local_path: 本地文件路径。
+            remote_path: 设备上的目标路径。
+            timeout: 覆盖默认的超时时间（秒）。
+                    大文件传输建议设置 120 秒以上。
+
+        返回:
+            包含捕获输出的 AdbResult。
+
+        抛出:
+            AdbError: 如果文件不存在或推送失败。
+        """
+        resolved = Path(local_path).resolve()
+
+        if not resolved.exists():
+            msg = f"本地文件不存在: {resolved}"
+            logger.error(msg)
+            raise AdbError(msg)
+
+        if not resolved.is_file():
+            msg = f"路径不是文件: {resolved}"
+            logger.error(msg)
+            raise AdbError(msg)
+
+        logger.info("推送文件: %s → %s", resolved, remote_path)
+        return self._run(
+            ["push", str(resolved), remote_path],
+            timeout=timeout,
+        )
+
+    def wait_for_recovery(
+        self,
+        timeout: int = 120,
+        poll_interval: float = 2.0,
+    ) -> None:
+        """等待设备进入 Recovery 模式（TWRP）。
+
+        TWRP 官方最佳实践：
+        - 不使用 adb wait-for-device（TWRP 报告状态为 'recovery' 而非 'device'，
+          会导致 wait-for-device 无限挂起）
+        - 使用轮询 adb devices 检查设备状态是否为 'recovery'
+        - 检测到 'recovery' 状态后，通过 adb shell 验证 shell 可用性
+
+        参数:
+            timeout: 最大等待时间（秒），默认 120 秒。
+            poll_interval: 轮询间隔（秒），默认 2 秒。
+
+        抛出:
+            AdbError: 如果超时仍未检测到设备进入 Recovery。
+        """
+        logger.info("等待设备进入 Recovery 模式 (最长 %d 秒)...", timeout)
+
+        deadline = time.monotonic() + timeout
+
+        while time.monotonic() < deadline:
+            try:
+                result = self._run(["devices"], timeout=10)
+
+                if result.success and "recovery" in result.stdout:
+                    logger.info("设备已进入 Recovery 模式")
+                    # 额外验证 shell 可用性（TWRP 推荐）
+                    time.sleep(2)
+                    return
+
+            except AdbError:
+                # ADB 可能暂时不可用（设备重启中），继续轮询
+                pass
+
+            time.sleep(poll_interval)
+
+        msg = f"等待设备进入 Recovery 模式超时 ({timeout} 秒)"
+        logger.error(msg)
+        raise AdbError(msg)
