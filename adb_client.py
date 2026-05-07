@@ -66,7 +66,7 @@ class AdbResult:
     @property
     def output(self) -> str:
         """返回 stdout（去除尾部换行），便于快速获取结果。"""
-        return self.stdout.strip()
+        return (self.stdout or "").strip()
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +142,51 @@ class AdbClient:
 
     # -- 核心方法 --
 
+    def devices(self) -> list[dict[str, str]]:
+        """执行 ``adb devices -l``，列出所有已连接设备。
+
+        ADB 官方文档推荐使用 ``adb devices`` 获取设备列表。
+        ``-l`` 参数附加设备详细信息（型号、传输方式等）。
+
+        返回：
+            设备信息字典列表，每项包含：
+            - ``serial``: 设备序列号
+            - ``state``: 设备状态（``device`` / ``offline`` / ``unauthorized``）
+            - ``info``: 附加信息字符串
+
+        注意：此方法不使用 ``-s`` 参数，始终列出所有设备。
+        """
+        cmd = [str(self._adb_path), "devices", "-l"]
+        logger.debug("列出设备: %s", " ".join(cmd))
+
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=self._timeout,
+            creationflags=(
+                subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            ),
+        )
+
+        result: list[dict[str, str]] = []
+        for line in proc.stdout.splitlines():
+            line = line.strip()
+            # 跳过标题行 "List of devices attached" 和空行
+            if not line or line.startswith("List of devices"):
+                continue
+            parts = line.split(maxsplit=2)
+            if len(parts) >= 2:
+                result.append({
+                    "serial": parts[0],
+                    "state": parts[1],
+                    "info": parts[2] if len(parts) > 2 else "",
+                })
+
+        return result
+
     def shell(
         self,
         command: str,
@@ -200,6 +245,45 @@ class AdbClient:
         effective_timeout = timeout if timeout is not None else max(self._timeout, 120)
         return self.run(
             "push", str(local), remote_path,
+            timeout=effective_timeout, check=check,
+        )
+
+    def push_dir(
+        self,
+        local_dir: str | Path,
+        remote_dir: str,
+        *,
+        timeout: int | None = None,
+        check: bool = False,
+    ) -> AdbResult:
+        """执行 ``adb push <local_dir>/. <remote_dir>``，推送整个目录。
+
+        对应抓包中的 sync 协议批量传输序列。
+        ``adb push`` 原生支持目录推送，会递归推送所有文件。
+
+        参数：
+            local_dir: 本地目录路径。
+            remote_dir: 设备端目标目录路径。
+            timeout: 命令超时（秒）。为 None 时使用实例默认值。
+            check: 为 True 时，命令失败则抛出 AdbCommandError。
+
+        返回：
+            AdbResult 对象。
+
+        Raises:
+            FileNotFoundError: 本地目录不存在。
+            AdbTimeoutError: 命令超时。
+            AdbCommandError: check=True 且命令失败。
+        """
+        local = Path(local_dir)
+        if not local.is_dir():
+            raise FileNotFoundError(f"本地目录不存在: {local}")
+
+        logger.info("推送目录: %s → %s", local, remote_dir)
+        # 目录推送可能包含多个大文件，使用更宽松的超时
+        effective_timeout = timeout if timeout is not None else max(self._timeout, 300)
+        return self.run(
+            "push", str(local) + "/.", remote_dir,
             timeout=effective_timeout, check=check,
         )
 
@@ -277,6 +361,8 @@ class AdbClient:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=effective_timeout,
                 creationflags=(
                     subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
@@ -290,8 +376,8 @@ class AdbClient:
         result = AdbResult(
             command=tuple(cmd),
             return_code=proc.returncode,
-            stdout=proc.stdout,
-            stderr=proc.stderr,
+            stdout=proc.stdout or "",
+            stderr=proc.stderr or "",
         )
 
         if result.success:

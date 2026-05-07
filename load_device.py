@@ -273,6 +273,88 @@ class DeviceLoader:
 
 
 # ---------------------------------------------------------------------------
+# 设备选择
+# ---------------------------------------------------------------------------
+
+def select_device(
+    adb_path: str | Path | None = None,
+    serial: str | None = None,
+) -> AdbClient:
+    """自动选择或交互选择设备，返回 AdbClient 实例。
+
+    基于 ADB 官方文档推荐的设备发现流程：
+
+    1. ``adb devices -l`` 列出所有已连接设备
+    2. 若指定了 serial，直接使用
+    3. 若仅一个设备，自动选择
+    4. 若多个设备，提示用户输入编号选择
+    5. 若无设备，抛出 AdbError
+
+    参数：
+        adb_path: adb 可执行文件路径。为 None 时自动查找。
+        serial: 设备序列号。若指定则跳过选择。
+
+    返回：
+        AdbClient 实例（已绑定到选定设备）。
+
+    Raises:
+        AdbError: 无设备连接或用户取消选择。
+    """
+    from pathlib import Path as _Path  # noqa: avoid shadowing
+
+    # 若已指定 serial，直接返回
+    if serial:
+        logger.info("使用指定设备: %s", serial)
+        return AdbClient(adb_path=adb_path, serial=serial)
+
+    # 创建临时客户端用于列出设备
+    temp_client = AdbClient(adb_path=adb_path)
+    devices = temp_client.devices()
+
+    # 仅保留 state=device 的在线设备
+    online_devices = [d for d in devices if d["state"] == "device"]
+
+    if not online_devices:
+        raise AdbError(
+            "未找到已连接的设备。请确认：\n"
+            "  1. 设备已通过 USB 连接\n"
+            "  2. 设备已启用 USB 调试\n"
+            "  3. 已授权此计算机的调试连接"
+        )
+
+    if len(online_devices) == 1:
+        chosen = online_devices[0]
+        logger.info(
+            "自动选择唯一设备: %s (%s)",
+            chosen["serial"], chosen["info"],
+        )
+        return AdbClient(adb_path=adb_path, serial=chosen["serial"])
+
+    # 多设备：交互选择
+    print("\n检测到多个设备，请选择：")
+    print("-" * 50)
+    for idx, dev in enumerate(online_devices, 1):
+        print(f"  [{idx}] {dev['serial']}  {dev['info']}")
+    print("-" * 50)
+
+    while True:
+        try:
+            choice = input(f"请输入编号 (1-{len(online_devices)}): ").strip()
+            num = int(choice)
+            if 1 <= num <= len(online_devices):
+                chosen = online_devices[num - 1]
+                logger.info("用户选择设备: %s", chosen["serial"])
+                return AdbClient(
+                    adb_path=adb_path, serial=chosen["serial"],
+                )
+            print(f"无效编号，请输入 1-{len(online_devices)}")
+        except ValueError:
+            print("请输入有效数字")
+        except (KeyboardInterrupt, EOFError):
+            raise AdbError("用户取消设备选择") from None
+
+
+# ---------------------------------------------------------------------------
 # 控制台输出
 # ---------------------------------------------------------------------------
 
