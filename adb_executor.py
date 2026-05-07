@@ -3,7 +3,8 @@
 遵循 Python 官方推荐的 subprocess.run() 轻量级封装：
 - subprocess.run() 是推荐的方法（Python 3.14 文档）
 - 使用 capture_output=True 捕获标准输出/标准错误
-- 使用 text=True 自动进行字符串解码
+- 使用 encoding="utf-8" 显式指定解码（ADB 输出固定 UTF-8）
+- 使用 errors="replace" 安全兜底畸形字节
 - 使用参数列表（不使用 shell=True）以保证安全
 - 使用超时机制防止挂起
 
@@ -133,18 +134,27 @@ class AdbExecutor:
         logger.debug("执行命令: %s", cmd_str)
 
         try:
-            # Python 官方推荐：使用带有 capture_output=True 和 text=True 的 subprocess.run()
+            # Python 官方推荐：使用带有 capture_output=True 的 subprocess.run()
+            # Android ADB 输出固定为 UTF-8 编码，Windows 默认使用 locale 编码（GBK），
+            # 显式指定 encoding="utf-8" 避免非 ASCII 字符解码失败。
+            # errors="replace" 作为安全兜底，防止任何畸形字节导致崩溃。
+            # 参考: https://docs.python.org/3/library/subprocess.html#frequently-used-arguments
             completed = subprocess.run(
                 full_cmd,
                 capture_output=True,
-                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=effective_timeout,
             )
 
+            # 防御性处理：解码异常时 stdout/stderr 可能为 None
+            stdout = (completed.stdout or "").strip()
+            stderr = (completed.stderr or "").strip()
+
             result = AdbResult(
                 command=cmd_str,
-                stdout=completed.stdout.strip(),
-                stderr=completed.stderr.strip(),
+                stdout=stdout,
+                stderr=stderr,
                 returncode=completed.returncode,
                 success=completed.returncode == 0,
             )

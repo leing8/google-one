@@ -298,8 +298,8 @@ def main() -> None:
         pcapng_path = (
             _PROJECT_ROOT
             / "WiresharkLog"
-            / "5.0-Install Magisk && Root Phone"
-            / "5.0-Install Magisk && Root Phone.pcapng"
+            / "6.0-Install Modules"
+            / "6.0-Install Modules.pcapng"
         )
     else:
         pcapng_path = Path(sys.argv[1])
