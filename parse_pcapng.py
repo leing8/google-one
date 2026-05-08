@@ -298,8 +298,8 @@ def main() -> None:
         pcapng_path = (
             _PROJECT_ROOT
             / "WiresharkLog"
-            / "6.0-Install Modules"
-            / "6.0-Install Modules.pcapng"
+            / "7.0-Randomly change device"
+            / "7.0-Randomly change device.pcapng"
         )
     else:
         pcapng_path = Path(sys.argv[1])
