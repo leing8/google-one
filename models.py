@@ -184,3 +184,30 @@ class RandomDeviceResult:
     verified_version: str
     vending_enabled: bool
     third_party_packages: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class IntegrityFixResult:
+    """Update Integrity Fix 的完整执行结果。
+
+    严格对应 8.0-Update Integrity Fix.pcapng 抓包日志中的 28 步操作。
+
+    属性:
+        root_verified: 步骤 1 — su -c "id" 是否确认 uid=0(root)。
+        root_uid: 步骤 1 — id 命令的完整输出。
+        tricky_store_installed: 步骤 2-6 — Tricky Store OSS 模块是否安装成功。
+        tricky_store_output: 步骤 5 — magisk --install-module 的完整输出。
+        pif_installed: 步骤 7-11 — OneChanger PIF Premium 模块是否安装成功。
+        pif_output: 步骤 10 — magisk --install-module 的完整输出。
+        config_written: 步骤 12-19 — Tricky Store config 哈希是否写入成功。
+        security_patch_written: 步骤 20-27 — security_patch.txt 是否写入成功。
+    """
+
+    root_verified: bool
+    root_uid: str
+    tricky_store_installed: bool
+    tricky_store_output: str
+    pif_installed: bool
+    pif_output: str
+    config_written: bool
+    security_patch_written: bool
