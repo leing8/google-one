@@ -13,8 +13,8 @@ import logging
 import time
 from pathlib import Path
 
-from adb_executor import AdbExecutor
-from randomly_change_device_xml import (
+from .adb_executor import AdbExecutor
+from .xml_modifier import (
     modify_packages_xml,
     modify_settings_global_xml,
     modify_settings_secure_xml,
@@ -81,9 +81,67 @@ _TOUCH_PATHS: tuple[tuple[int, str], ...] = (
     (303, "./system/priv-app/GoogleServicesFramework/GoogleServicesFramework.apk"),
 )
 
+# MiChanger mi_info.json base64 内容（步骤 257）
+_MI_INFO_B64: str = (
+    "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"
+    "2TkNPKx1DisdZyD/9vqQ=="
+)
 
-def _shell(executor: AdbExecutor, step: int, cmd: str, timeout: int = _SHELL_TIMEOUT) -> bool:
-    """执行 shell 命令并记录日志。"""
+
+def _shell(
+    executor: AdbExecutor, step: int, cmd: str, timeout: int = _SHELL_TIMEOUT,
+) -> bool:
+    """执行 shell 命令并记录日志."""
     logger.info("步骤 %d: %s", step, cmd[:120])
     result = executor.run_shell(cmd, timeout=timeout)
     out = result.stdout or result.stderr
@@ -92,7 +150,9 @@ def _shell(executor: AdbExecutor, step: int, cmd: str, timeout: int = _SHELL_TIM
     return result.success
 
 
-def set_security_props_and_mi_files(executor: AdbExecutor) -> tuple[bool, bool]:
+def set_security_props_and_mi_files(
+    executor: AdbExecutor,
+) -> tuple[bool, bool]:
     """阶段 J: 步骤 240-268."""
 
     # 步骤 240-247: 安全属性
@@ -117,63 +177,8 @@ def set_security_props_and_mi_files(executor: AdbExecutor) -> tuple[bool, bool]:
         r"printf 'gs0O2me1MWHKmZwGpABcFw==\n' > /system_root/system/etc/mi/mi_info.json",
         timeout=_SHELL_TIMEOUT,
     )
-    # 步骤 257 的长 base64 内容
-    b64_content = (
-        "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"
-        "2TkNPKx1DisdZyD/9vqQ=="
-    )
     executor.run_shell(
-        f"printf '{b64_content}' >> /system_root/system/etc/mi/mi_info.json",
+        f"printf '{_MI_INFO_B64}' >> /system_root/system/etc/mi/mi_info.json",
         timeout=_SHELL_TIMEOUT,
     )
 
@@ -220,16 +225,15 @@ def cleanup_and_push(
     """阶段 K: 步骤 269-315."""
 
     # 步骤 269-287: rm -rf 应用数据
-    _DATA_DIRS = (
+    data_dirs = (
         "/data/data/{pkg}", "/data/user_de/0/{pkg}", "/data/user/0/{pkg}",
         "/sdcard/Android/data/{pkg}", "/data/misc/profiles/ref/{pkg}",
         "/data/misc/profiles/cur/0/{pkg}",
     )
     for step, pkg in _APP_DATA_PACKAGES:
-        # 步骤 270 (gms) 用 /* 而非删除目录本身
         suffix = "/*" if pkg == "com.google.android.gms" else ""
         paths = " ".join(
-            d.format(pkg=pkg) + suffix for d in _DATA_DIRS
+            d.format(pkg=pkg) + suffix for d in data_dirs
         )
         _shell(executor, step, f"rm -rf {paths}", timeout=_LONG_TIMEOUT)
 
@@ -319,7 +323,9 @@ def cleanup_and_push(
     return pkg_ok, settings_ok, True
 
 
-def reboot_and_verify(executor: AdbExecutor) -> tuple[bool, str, str, str, bool, tuple[str, ...]]:
+def reboot_and_verify(
+    executor: AdbExecutor,
+) -> tuple[bool, str, str, str, bool, tuple[str, ...]]:
     """阶段 L: 步骤 316-332."""
 
     # 步骤 316: reboot

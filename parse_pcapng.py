@@ -298,8 +298,8 @@ def main() -> None:
         pcapng_path = (
             _PROJECT_ROOT
             / "WiresharkLog"
-            / "8.0-Update Integrity Fix"
-            / "8.0-Update Integrity Fix.pcapng"
+            / "12.0-Install Apk-XApk"
+            / "12.0-Install Apk-XApk.pcapng"
         )
     else:
         pcapng_path = Path(sys.argv[1])

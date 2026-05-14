@@ -178,6 +178,94 @@ class AdbExecutor:
             logger.error(msg)
             raise AdbError(msg) from None
 
+    def run_streaming_shell(
+        self,
+        command: str,
+        data: bytes,
+        timeout: int | None = None,
+    ) -> AdbResult:
+        """执行 ADB shell 命令并通过 stdin 发送二进制数据。
+
+        严格对应抓包日志中 exec:cmd package install-write -S 的协议：
+        1. 通过 ADB exec: 协议打开 shell 流
+        2. 将 APK 二进制数据通过 stdin 管道发送到设备端
+        3. 设备端 PackageManager 从 stdin 读取指定大小的字节
+
+        按照 Python 官方文档推荐（3.14）：
+        - subprocess.run(input=data) 是向 stdin 发送数据的推荐方式
+        - 当 input 为 bytes 时，不指定 encoding 参数（原始字节模式）
+        - stdout/stderr 使用 subprocess.PIPE 捕获并手动解码
+        - 参数列表（不使用 shell=True）防止注入
+
+        参考:
+            https://docs.python.org/3/library/subprocess.html#subprocess.run
+            "If input is provided, the stdin argument is set to PIPE automatically."
+
+        参数:
+            command: shell 命令（例如 "exec:cmd package 'install-write' ..."）。
+            data: 要通过 stdin 发送的二进制数据。
+            timeout: 覆盖默认的超时时间（秒）。
+
+        返回:
+            包含命令输出和状态的 AdbResult。
+
+        抛出:
+            AdbError: 如果命令超时或 ADB 不可用。
+        """
+        effective_timeout = timeout if timeout is not None else self._timeout
+        full_cmd = [self._adb_path, "shell", command]
+        cmd_str = " ".join(full_cmd)
+
+        logger.debug(
+            "执行流式命令: %s (stdin: %d bytes)", cmd_str, len(data)
+        )
+
+        try:
+            # Python 官方推荐：subprocess.run(input=bytes) 自动设置 stdin=PIPE
+            # 使用原始字节模式：不指定 encoding，stdout/stderr 返回 bytes
+            completed = subprocess.run(
+                full_cmd,
+                input=data,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=effective_timeout,
+            )
+
+            # 手动解码输出（ADB 固定 UTF-8，errors="replace" 安全兜底）
+            stdout = (completed.stdout or b"").decode(
+                "utf-8", errors="replace"
+            ).strip()
+            stderr = (completed.stderr or b"").decode(
+                "utf-8", errors="replace"
+            ).strip()
+
+            result = AdbResult(
+                command=cmd_str,
+                stdout=stdout,
+                stderr=stderr,
+                returncode=completed.returncode,
+                success=completed.returncode == 0,
+            )
+
+            logger.debug(
+                "流式执行结果: rc=%d stdout=%r stderr=%r",
+                result.returncode,
+                result.stdout[:200],
+                result.stderr[:200],
+            )
+
+            return result
+
+        except FileNotFoundError:
+            msg = f"未找到 ADB 可执行文件: {self._adb_path}"
+            logger.error(msg)
+            raise AdbError(msg) from None
+
+        except subprocess.TimeoutExpired:
+            msg = f"ADB 流式命令在 {effective_timeout} 秒后超时: {cmd_str}"
+            logger.error(msg)
+            raise AdbError(msg) from None
+
     def reboot(self, target: str = "", timeout: int | None = None) -> AdbResult:
         """重启设备到指定目标。
 

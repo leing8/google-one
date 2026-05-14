@@ -211,3 +211,57 @@ class IntegrityFixResult:
     pif_output: str
     config_written: bool
     security_patch_written: bool
+
+
+@dataclass(frozen=True)
+class ApkWriteDetail:
+    """单个 APK 的 install-write 写入结果。
+
+    严格对应 12.0-Install Apk-XApk.pcapng 抓包日志中步骤 2-5 的
+    exec:cmd package 'install-write' -S <size> <session_id> <name>.apk 命令。
+
+    属性:
+        apk_name: 安装时使用的 APK 逻辑名称（例如 "baseAPK.apk"）。
+        original_name: XAPK 内的原始文件名（例如 "config.en.apk"）。
+        size: APK 文件大小（字节）。
+        streamed_bytes: 实际流式传输的字节数（从输出解析）。
+        write_success: install-write 是否成功（输出包含 "Success"）。
+    """
+
+    apk_name: str
+    original_name: str
+    size: int
+    streamed_bytes: int
+    write_success: bool
+
+
+@dataclass(frozen=True)
+class InstallApkResult:
+    """Install Apk-XApk 的完整执行结果。
+
+    严格对应 12.0-Install Apk-XApk.pcapng 抓包日志中的 7 步操作。
+
+    属性:
+        xapk_path: XAPK 源文件路径。
+        package_name: 应用包名（从 manifest.json 读取）。
+        app_name: 应用显示名称。
+        version_name: 应用版本号。
+        session_id: 步骤 1 — install-create 返回的会话 ID。
+        create_success: 步骤 1 — install-create 是否成功。
+        write_results: 步骤 2-5 — 各 APK install-write 结果元组。
+        commit_success: 步骤 6 — install-commit 是否成功。
+        vending_enabled: 步骤 7 — pm enable com.android.vending 是否成功。
+        all_success: 所有步骤是否都执行成功。
+    """
+
+    xapk_path: str
+    package_name: str
+    app_name: str
+    version_name: str
+    session_id: str
+    create_success: bool
+    write_results: tuple[ApkWriteDetail, ...]
+    commit_success: bool
+    vending_enabled: bool
+    all_success: bool
+

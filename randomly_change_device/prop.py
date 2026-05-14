@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 
-from adb_executor import AdbExecutor
+from .adb_executor import AdbExecutor
 
 logger = logging.getLogger(__name__)
 

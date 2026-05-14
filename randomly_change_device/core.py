@@ -17,16 +17,9 @@
     阶段 K (步骤 269-315): 数据清理 & XML 文件推送
     阶段 L (步骤 316-332): 重启 & 验证
 
-Python 官方最佳实践：
-    - argparse 模块处理命令行参数
-    - logging 模块进行结构化日志
-    - tempfile 模块用于安全的临时文件操作
-    - pathlib.Path 用于路径操作
-
 参考:
     https://docs.python.org/3/library/argparse.html
     https://docs.python.org/3/library/logging.html
-    https://docs.python.org/3/library/tempfile.html
 """
 
 from __future__ import annotations
@@ -36,19 +29,19 @@ import sys
 import tempfile
 from pathlib import Path
 
-from adb_executor import AdbError, AdbExecutor
-from models import RandomDeviceResult
-from randomly_change_device_data import (
+from .adb_executor import AdbError, AdbExecutor
+from .data import (
     cleanup_and_push,
     reboot_and_verify,
     set_security_props_and_mi_files,
 )
-from randomly_change_device_prep import (
+from .models import RandomDeviceResult
+from .prep import (
     check_device_state,
     prepare_system,
     reboot_and_mount,
 )
-from randomly_change_device_prop import (
+from .prop import (
     modify_odm_build_prop,
     modify_product_build_prop,
     modify_prop_default,
@@ -67,19 +60,13 @@ _TARGET_ANDROID_ID: str = "dce5d1470ae48e43"
 def randomly_change_device(
     executor: AdbExecutor,
 ) -> RandomDeviceResult:
-    """执行 Randomly Change Device 完整流程。
-
-    严格按照 7.0-Randomly change device.pcapng 抓包日志中的
-    332 步命令序列逐行执行。
+    """执行 Randomly Change Device 完整流程.
 
     参数:
         executor: ADB 命令执行器实例。
 
     返回:
         包含所有阶段执行结果的 RandomDeviceResult。
-
-    抛出:
-        AdbError: 如果 ADB 不可用或设备未连接。
     """
     logger.info("=" * 60)
     logger.info("Randomly Change Device — 开始执行")
@@ -176,8 +163,6 @@ def randomly_change_device(
     logger.info("阶段 K: 数据清理 & 文件推送 (步骤 269-315)")
     logger.info("━" * 40)
 
-    # 使用临时目录存放 pull/push 的 XML 文件
-    # Python 官方推荐：tempfile.mkdtemp() 创建安全临时目录
     work_dir = Path(tempfile.mkdtemp(prefix="rcd_"))
     logger.info("  工作目录: %s", work_dir)
 
@@ -223,7 +208,7 @@ def randomly_change_device(
 
 
 def _print_summary(result: RandomDeviceResult) -> None:
-    """打印可读的执行结果汇总。"""
+    """打印可读的执行结果汇总."""
     logger.info("")
     logger.info("=" * 60)
     logger.info("Randomly Change Device — 执行结果汇总")
@@ -253,10 +238,10 @@ def _print_summary(result: RandomDeviceResult) -> None:
 
 
 def main() -> None:
-    """Randomly Change Device 的命令行入口。
+    """Randomly Change Device 的命令行入口.
 
     用法:
-        python randomly_change_device.py
+        python -m randomly_change_device
     """
     import argparse
 
@@ -271,9 +256,8 @@ def main() -> None:
     )
     parser.parse_args()
 
-    # 使用项目内置的 platform-tools/adb.exe
-    project_root = Path(__file__).resolve().parent
-    adb_path = project_root / "platform-tools" / "adb.exe"
+    module_root = Path(__file__).resolve().parent
+    adb_path = module_root.parent / "platform-tools" / "adb.exe"
 
     if not adb_path.exists():
         logger.error("未找到 ADB: %s", adb_path)
@@ -290,7 +274,3 @@ def main() -> None:
         sys.exit(1)
 
     sys.exit(0 if result.reboot_success else 1)
-
-
-if __name__ == "__main__":
-    main()

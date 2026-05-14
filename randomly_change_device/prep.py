@@ -1,28 +1,17 @@
 """Randomly Change Device — 阶段 A-C: 设备检查、系统准备、Recovery 挂载.
 
-严格按照 WiresharkLog/7.0-Randomly change device/7.0-Randomly change device.pcapng
-抓包日志中步骤 1-47 的 ADB 命令序列一比一实现。
+严格按照 7.0-Randomly change device.pcapng 步骤 1-47。
 
 阶段 A (步骤 1-2):   设备状态检查
 阶段 B (步骤 3-31):  系统准备 & 清理应用数据
 阶段 C (步骤 32-47): 重启到 Recovery & 挂载分区
-
-Python 官方最佳实践：
-    - subprocess.run() 是推荐方法（Python 3.14 文档）
-    - 参数列表（不使用 shell=True）防止命令注入
-    - dataclasses(frozen=True) 实现不可变数据模型
-    - logging 模块进行结构化日志
-
-参考:
-    https://docs.python.org/3/library/subprocess.html#subprocess.run
-    https://docs.python.org/3/library/logging.html
 """
 
 from __future__ import annotations
 
 import logging
 
-from adb_executor import AdbExecutor
+from .adb_executor import AdbExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +41,7 @@ _PM_CLEAR_PACKAGES: tuple[str, ...] = (
     "com.android.vending",                    # 步骤 31（重复清理）
 )
 
-# 步骤 34-40: TWRP 挂载的分区列表（严格按照抓包日志顺序）
+# 步骤 34-40: TWRP 挂载的分区列表
 _TWRP_MOUNT_PARTITIONS: tuple[str, ...] = (
     "/system",      # 步骤 34
     "/system_ext",  # 步骤 35
@@ -63,7 +52,7 @@ _TWRP_MOUNT_PARTITIONS: tuple[str, ...] = (
     "/firmware",    # 步骤 40
 )
 
-# 步骤 41-47: remount rw 的分区列表（严格按照抓包日志顺序）
+# 步骤 41-47: remount rw 的分区列表
 _REMOUNT_RW_PARTITIONS: tuple[str, ...] = (
     "/system_root",  # 步骤 41
     "/system_ext",   # 步骤 42
@@ -74,7 +63,6 @@ _REMOUNT_RW_PARTITIONS: tuple[str, ...] = (
     "/firmware",     # 步骤 47
 )
 
-# 超时设置（秒）
 _SHELL_TIMEOUT: int = 30
 _REBOOT_TIMEOUT: int = 30
 
@@ -85,13 +73,10 @@ _REBOOT_TIMEOUT: int = 30
 def check_device_state(
     executor: AdbExecutor,
 ) -> tuple[str, tuple[str, ...]]:
-    """阶段 A: 检查设备状态。
+    """阶段 A: 检查设备状态.
 
     步骤 1: getprop persist.sys.locale
     步骤 2: dumpsys account | grep '@gmail.com, type=com.google}'
-
-    参数:
-        executor: ADB 命令执行器实例。
 
     返回:
         (locale, gmail_accounts) 元组。
@@ -128,19 +113,7 @@ def check_device_state(
 
 
 def prepare_system(executor: AdbExecutor) -> bool:
-    """阶段 B: 系统准备和应用数据清理。
-
-    步骤 3:  input keyevent HOME
-    步骤 4:  svc wifi disable
-    步骤 5:  settings put global wifi_on 1
-    步骤 6:  settings put global development_settings_enabled 0
-    步骤 7:  settings put global auto_time_zone 0
-    步骤 8:  service call alarm 3 s16 America/Adak
-    步骤 9:  locksettings set-disabled True
-    步骤 10-31: pm clear × 22
-
-    参数:
-        executor: ADB 命令执行器实例。
+    """阶段 B: 系统准备和应用数据清理.
 
     返回:
         所有步骤是否成功（pm clear 允许 Failed）。
@@ -236,15 +209,7 @@ def prepare_system(executor: AdbExecutor) -> bool:
 
 
 def reboot_and_mount(executor: AdbExecutor) -> bool:
-    """阶段 C: 重启到 Recovery 模式并挂载所有分区。
-
-    步骤 32: reboot:recovery
-    步骤 33: twrp --version（等待 Recovery 就绪后验证）
-    步骤 34-40: twrp mount × 7
-    步骤 41-47: mount -o remount,rw × 7
-
-    参数:
-        executor: ADB 命令执行器实例。
+    """阶段 C: 重启到 Recovery 模式并挂载所有分区.
 
     返回:
         Recovery 挂载是否完成。
@@ -254,7 +219,6 @@ def reboot_and_mount(executor: AdbExecutor) -> bool:
     executor.reboot("recovery", timeout=_REBOOT_TIMEOUT)
     logger.info("  重启到 Recovery 命令已发送")
 
-    # 等待设备进入 Recovery 模式
     executor.wait_for_recovery(timeout=120, poll_interval=2.0)
 
     # 步骤 33: twrp --version
