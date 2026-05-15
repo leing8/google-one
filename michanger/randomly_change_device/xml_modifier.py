@@ -58,15 +58,6 @@ _TOUCH_TARGETS: tuple[str, ...] = (
 )
 
 # 额外清理路径（pcapng 命令 305-309）
-_SUBSCRIPTIONS_RED_DIRS: str = (
-    "/data/data/com.google.android.apps.subscriptions.red "
-    "/data/user_de/0/com.google.android.apps.subscriptions.red "
-    "/data/user/0/com.google.android.apps.subscriptions.red "
-    "/sdcard/Android/data/com.google.android.apps.subscriptions.red "
-    "/data/misc/profiles/ref/com.google.android.apps.subscriptions.red "
-    "/data/misc/profiles/cur/0/com.google.android.apps.subscriptions.red"
-)
-
 _EXTRA_CLEANUP_PATHS: tuple[str, ...] = (
     "/system/addon.d",
     "/system/bin/install-recovery.sh",
@@ -322,11 +313,25 @@ def modify_xml_files(
             adb.shell(f"find {target} -exec touch -m -a {{}} +")
             count += 1
 
-        # ---- pcapng 命令 305: rm -rf subscriptions.red 数据 ----
-        adb.shell(f"rm -rf {_SUBSCRIPTIONS_RED_DIRS}")
-        count += 1
+        # ---- pcapng 命令 316: rm -rf extra_cleanup_packages 数据 ----
+        # 仅清理额外配置的包（如 subscriptions.red）
+        # 固定包的 rm-rf 已在阶段 9 完成
+        _APP_DATA_DIR_TEMPLATES = (
+            "/data/data/{pkg}",
+            "/data/user_de/0/{pkg}",
+            "/data/user/0/{pkg}",
+            "/sdcard/Android/data/{pkg}",
+            "/data/misc/profiles/ref/{pkg}",
+            "/data/misc/profiles/cur/0/{pkg}",
+        )
+        for pkg in profile.extra_cleanup_packages:
+            paths = " ".join(
+                tpl.format(pkg=pkg) for tpl in _APP_DATA_DIR_TEMPLATES
+            )
+            adb.shell(f"rm -rf {paths}")
+            count += 1
 
-        # ---- pcapng 命令 306-309: rm -rf 额外清理 ----
+        # ---- pcapng 命令 317-320: rm -rf 额外清理 ----
         for path in _EXTRA_CLEANUP_PATHS:
             adb.shell(f"rm -rf {path}")
             count += 1

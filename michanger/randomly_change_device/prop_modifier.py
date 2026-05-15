@@ -571,11 +571,14 @@ def modify_vendor_build_prop(
     _cleanup_markers(adb, path)
     count += 1
 
-    # 特殊清理（pcapng 命令 239-240）
-    _remove_line(adb, path, "ro.hardware.keystore_desede")
-    count += 1
-    _remove_line(adb, path, "ro.hardware.egl")
-    count += 1
+    # 条件清理（pcapng 命令 239-240）
+    # 仅当行存在时执行（第二次执行时这些行已被删除）
+    if "ro.hardware.keystore_desede" in content:
+        _remove_line(adb, path, "ro.hardware.keystore_desede")
+        count += 1
+    if "ro.hardware.egl" in content:
+        _remove_line(adb, path, "ro.hardware.egl")
+        count += 1
 
     logger.info("修改 %s 完成: %d 条命令", path, count)
     return count

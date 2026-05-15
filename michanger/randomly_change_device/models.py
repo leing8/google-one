@@ -46,8 +46,9 @@ class DeviceProfile:
         mi_info_data: mi_info.json 加密数据（Base64）
         config_hash: /system/etc/config 哈希值
         android_id: 目标 android_id（16 位十六进制）
-        pm_clear_packages: 需要 pm clear 的应用包名列表
-        rm_rf_packages: 需要 rm -rf 清理数据的应用包名列表
+        cleanup_packages: 固定清理的应用包名列表（pm clear + rm -rf 数据 + APK 目录，阶段 3/9）
+        extra_cleanup_packages: 额外清理的应用包名列表（pm clear + rm -rf，阶段 3/10）
+        finalize_clear_packages: pm clear 最后阶段再次清理的包（默认 gms/gsf/vending）
         system_cleanup_paths: 系统数据清理路径列表
     """
 
@@ -77,9 +78,14 @@ class DeviceProfile:
     mi_info_data: str
     config_hash: str
     android_id: str
-    pm_clear_packages: tuple[str, ...]
-    rm_rf_packages: tuple[str, ...]
+    cleanup_packages: tuple[str, ...]
+    extra_cleanup_packages: tuple[str, ...]
     system_cleanup_paths: tuple[str, ...]
+    finalize_clear_packages: tuple[str, ...] = (
+        "com.google.android.gms",
+        "com.google.android.gsf",
+        "com.android.vending",
+    )
 
 
 @dataclass(frozen=True)

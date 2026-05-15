@@ -30,7 +30,7 @@ import logging
 from pathlib import Path
 
 from michanger.common import AdbError, AdbExecutor
-from . import app_cleaner, prop_modifier, xml_modifier, randomizer
+from . import account_manager, app_cleaner, prop_modifier, xml_modifier, randomizer
 from .models import ChangeDeviceResult, DeviceProfile, PhaseResult
 
 logger = logging.getLogger(__name__)
@@ -133,8 +133,8 @@ def load_profile(name: str | None = None) -> DeviceProfile:
         mi_info_data=data["mi_info_data"],
         config_hash=data["config_hash"],
         android_id=data["android_id"],
-        pm_clear_packages=tuple(data["pm_clear_packages"]),
-        rm_rf_packages=tuple(data["rm_rf_packages"]),
+        cleanup_packages=tuple(data["cleanup_packages"]),
+        extra_cleanup_packages=tuple(data.get("extra_cleanup_packages", [])),
         system_cleanup_paths=tuple(data["system_cleanup_paths"]),
     )
 
@@ -143,8 +143,12 @@ def load_profile(name: str | None = None) -> DeviceProfile:
 # 各阶段实现
 # ------------------------------------------------------------------
 
-def _phase1_probe(adb: AdbExecutor) -> PhaseResult:
-    """阶段 1: 设备信息探测（pcapng 命令 1-2）。"""
+def _phase1_probe(adb: AdbExecutor) -> tuple[PhaseResult, str, bool]:
+    """阶段 1: 设备信息探测（pcapng 命令 1-2）。
+
+    Returns:
+        (PhaseResult, locale, has_gmail) 元组
+    """
     count = 0
 
     locale_result = adb.shell("getprop persist.sys.locale")
@@ -152,54 +156,70 @@ def _phase1_probe(adb: AdbExecutor) -> PhaseResult:
     locale = locale_result.output.strip()
     logger.info("设备 locale: %s", locale)
 
-    gmail_result = adb.shell(
-        "dumpsys account | grep '@gmail.com, type=com.google}'"
-    )
+    # 检测 Gmail 账号（决定是否触发 UI 删除流程）
+    # 7.0.1（首次）: 无响应 → 不触发
+    # 7.1（二次）: 返回 Account {...} → 触发删除
+    has_gmail = account_manager.has_gmail_account(adb)
     count += 1
-    gmail = gmail_result.output.strip()
-    logger.info("Gmail 账号: %s", gmail if gmail else "(无)")
 
-    return PhaseResult(
-        phase_name="设备信息探测",
-        phase_number=1,
-        success=True,
-        message=f"locale={locale}",
-        commands_executed=count,
+    return (
+        PhaseResult(
+            phase_name="设备信息探测",
+            phase_number=1,
+            success=True,
+            message=f"locale={locale}, gmail={'有' if has_gmail else '无'}",
+            commands_executed=count,
+        ),
+        locale,
+        has_gmail,
     )
 
 
 def _phase2_system_settings(
     adb: AdbExecutor,
     profile: DeviceProfile,
+    *,
+    has_gmail: bool = False,
 ) -> PhaseResult:
-    """阶段 2: 系统设置初始化（pcapng 命令 3-9）。"""
+    """阶段 2: 系统设置初始化（pcapng 命令 3-25）。
+
+    当检测到 Gmail 账号时（非首次执行），先执行 UI 自动化删除账号（含 HOME），
+    然后执行常规系统设置。无 Gmail 时只执行 HOME + 系统设置。
+    """
     count = 0
 
-    # 按 HOME 键（命令 3）
-    adb.shell("input keyevent HOME")
-    count += 1
+    # 条件触发：Google 账号删除 UI 自动化
+    # 7.0.1（首次）: 无 Gmail → 只执行 HOME
+    # 7.1（二次）: 有 Gmail → 执行 16 条 UI 命令 + HOME
+    if has_gmail:
+        logger.info("检测到 Gmail 账号，执行 UI 删除流程")
+        count += account_manager.remove_google_account(adb)
+    else:
+        # 首次执行：直接 HOME（pcapng 7.0.1 命令 3）
+        adb.shell("input keyevent HOME")
+        count += 1
 
-    # 关闭 WiFi（命令 4）
+    # 关闭 WiFi（命令 20）
     adb.shell("svc wifi disable")
     count += 1
 
-    # 设置 WiFi 开关为 1（命令 5）
+    # 设置 WiFi 开关为 1（命令 21）
     adb.shell("settings put global wifi_on 1")
     count += 1
 
-    # 关闭开发者选项（命令 6）
+    # 关闭开发者选项（命令 22）
     adb.shell("settings put global development_settings_enabled 0")
     count += 1
 
-    # 关闭自动时区（命令 7）
+    # 关闭自动时区（命令 23）
     adb.shell("settings put global auto_time_zone 0")
     count += 1
 
-    # 设置时区（命令 8）
+    # 设置时区（命令 24）
     adb.shell(f"service call alarm 3 s16 {profile.timezone}")
     count += 1
 
-    # 禁用锁屏（命令 9）
+    # 禁用锁屏（命令 25）
     adb.shell("locksettings set-disabled True")
     count += 1
 
@@ -207,7 +227,7 @@ def _phase2_system_settings(
         phase_name="系统设置初始化",
         phase_number=2,
         success=True,
-        message="WiFi/开发者/时区/锁屏已配置",
+        message=f"WiFi/开发者/时区/锁屏已配置{' + 账号删除' if has_gmail else ''}",
         commands_executed=count,
     )
 
@@ -245,10 +265,10 @@ def _phase4_reboot_recovery(adb: AdbExecutor) -> PhaseResult:
 
 
 def _phase5_mount_partitions(adb: AdbExecutor) -> PhaseResult:
-    """阶段 5: TWRP 挂载分区 + remount rw（pcapng 命令 34-50）。"""
+    """阶段 5: TWRP 挂载分区 + remount rw（pcapng 命令 34-49）。"""
     count = 0
 
-    # 验证 TWRP 版本（命令 34, 50）
+    # 验证 TWRP 版本（命令 34）
     adb.shell("twrp --version")
     count += 1
 
@@ -266,9 +286,7 @@ def _phase5_mount_partitions(adb: AdbExecutor) -> PhaseResult:
     adb.shell("ls /system_root/system/etc")
     count += 1
 
-    # TWRP 版本再次验证（命令 50）
-    adb.shell("twrp --version")
-    count += 1
+    # 注: 7.0.1 有第二次 twrp --version，7.1 中已移除
 
     return PhaseResult(
         phase_name="挂载分区",
@@ -371,26 +389,33 @@ def _phase8_security_and_mi_info(
         adb.shell(f"printf '{content}' {redirect} {custom_path}")
         count += 1
 
-    # 读取 config（命令 267）
-    adb.shell("cat /system_root/system/etc/config")
+    # 读取 config（命令 267）— 同时判断是否需要写入
+    # 7.0.1（首次）: "No such file or directory" → 需要写入
+    # 7.1（二次）: 返回已存在的 hash → 跳过写入
+    config_result = adb.shell("cat /system_root/system/etc/config")
     count += 1
 
-    # 写入 config hash（命令 268）
-    adb.shell(
-        f"printf '{profile.config_hash}' "
-        f"> /system_root/system/etc/config"
-    )
-    count += 1
+    config_missing = "No such file" in config_result.output
+    if config_missing:
+        # 写入 config hash（命令 268）
+        adb.shell(
+            f"printf '{profile.config_hash}' "
+            f"> /system_root/system/etc/config"
+        )
+        count += 1
 
-    # chmod config（命令 269）
-    adb.shell("chmod 644 /system_root/system/etc/config")
-    count += 1
+        # chmod config（命令 269）
+        adb.shell("chmod 644 /system_root/system/etc/config")
+        count += 1
+        logger.info("config 文件不存在，已创建并写入 hash")
+    else:
+        logger.info("config 文件已存在，跳过写入")
 
     return PhaseResult(
         phase_name="安全属性 + mi_info",
         phase_number=8,
         success=True,
-        message="安全属性/mi_info/config 已写入",
+        message=f"安全属性/mi_info 已写入{' + config 已创建' if config_missing else ''}",
         commands_executed=count,
     )
 
@@ -410,7 +435,7 @@ def _phase9_deep_cleanup(
     count += app_cleaner.rm_rf_app_data(adb, profile)
 
     # pcapng 命令 289-294: 清理 /data/app/ 目录
-    count += app_cleaner.cleanup_data_app(adb)
+    count += app_cleaner.cleanup_data_app(adb, profile)
 
     # pcapng 命令 295-296: 系统数据清理
     count += app_cleaner.cleanup_system_data(adb, profile)
@@ -464,18 +489,17 @@ def _phase11_reboot_verify(
     if not boot_ready:
         logger.warning("等待启动超时")
 
-    # 验证设备属性（命令 329-331）
+    # 验证设备属性（命令 340-341）
     brand = adb.shell("getprop ro.product.brand").output.strip()
     model = adb.shell("getprop ro.product.model").output.strip()
-    version = adb.shell("getprop ro.build.version.release").output.strip()
-    count += 3
-    logger.info("验证: brand=%s, model=%s, version=%s", brand, model, version)
+    count += 2
+    logger.info("验证: brand=%s, model=%s", brand, model)
 
-    # 启用 Play Store（命令 332）
+    # 启用 Play Store（命令 342）
     adb.shell("pm enable com.android.vending")
     count += 1
 
-    # 列出第三方应用（命令 333）
+    # 列出第三方应用（命令 343）
     pkg_result = adb.shell("pm list packages -3")
     count += 1
     logger.info("第三方应用:\n%s", pkg_result.output)
@@ -489,7 +513,7 @@ def _phase11_reboot_verify(
         phase_name="重启验证",
         phase_number=11,
         success=verified,
-        message=f"brand={brand}, model={model}, ver={version}",
+        message=f"brand={brand}, model={model}",
         commands_executed=count,
     )
 
@@ -546,13 +570,12 @@ def randomly_change_device(
 
     # 阶段 1: 设备信息探测
     logger.info("[Phase 1/11] 设备信息探测")
-    p1 = _phase1_probe(adb)
+    p1, locale, has_gmail = _phase1_probe(adb)
     phases.append(p1)
-    locale = p1.message.replace("locale=", "")
 
-    # 阶段 2: 系统设置初始化
+    # 阶段 2: 系统设置初始化（含条件 Google 账号删除）
     logger.info("[Phase 2/11] 系统设置初始化")
-    phases.append(_phase2_system_settings(adb, profile))
+    phases.append(_phase2_system_settings(adb, profile, has_gmail=has_gmail))
 
     # 阶段 3: pm clear
     logger.info("[Phase 3/11] pm clear 清理应用数据")
