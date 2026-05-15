@@ -38,7 +38,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from michanger.common import AdbExecutor
-from .models import DeviceProfile
+from michanger.common import DeviceProfile
 
 logger = logging.getLogger(__name__)
 

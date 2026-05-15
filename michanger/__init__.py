@@ -12,5 +12,6 @@ MiChanger — Android 设备自动化管理工具集。
     - michanger.update_integrity_fix:   更新 Integrity Fix（Tricky Store + PIF Premium + 系统配置）
     - michanger.wipe_packages_reboot:   包清理与重启（严格还原 11.0-Wipe Packages & Reboot.pcapng）
     - michanger.import_file_to_phone:   文件导入到手机（严格还原 13.0-Import File to Phone.pcapng）
+    - michanger.random_change_sim_info: SIM 信息随机化（严格还原 14.0-Random & Change SIM Info Only.pcapng）
 """
 

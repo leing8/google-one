@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from michanger.common import AdbExecutor
-from .models import DeviceProfile
+from michanger.common import DeviceProfile
 
 logger = logging.getLogger(__name__)
 

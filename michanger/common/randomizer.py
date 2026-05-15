@@ -1,5 +1,5 @@
 """
-设备随机化值生成器。
+设备随机化值生成器 — 通用共享模块。
 
 每次执行设备随机化时，部分值需要动态生成以避免指纹重复。
 本模块提供所有可随机化字段的生成函数。
@@ -9,11 +9,7 @@
 - guid:        UUID v4 随机生成
 - serial_no:   10 位大写字母+数字随机序列号
 
-待定字段（暂用固定值）：
-- mi_info_data: MiChangerPro AES 加密数据，无法逆向
-
-不需要随机化的字段：
-- config_hash:  工具版本签名，两次执行相同
+由 randomly_change_device 和 random_change_sim_info 共享。
 
 参考：
 - https://docs.python.org/3/library/uuid.html

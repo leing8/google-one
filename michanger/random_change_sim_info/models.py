@@ -1,10 +1,11 @@
 """
-Randomly Change Device — 数据模型。
+Random & Change SIM Info Only — 数据模型。
 
 所有模型均使用 frozen=True 保证不可变性（PEP 557）。
 
 参考：
 - https://docs.python.org/3/library/dataclasses.html
+- 14.0/14.1/14.2 pcapng 三份抓包对比分析
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ class PhaseResult:
 
     Attributes:
         phase_name: 阶段名称
-        phase_number: 阶段编号
+        phase_number: 阶段编号（1-6）
         success: 是否成功
         message: 结果描述
         commands_executed: 执行的命令数量
@@ -32,19 +33,21 @@ class PhaseResult:
 
 
 @dataclass(frozen=True)
-class ChangeDeviceResult:
-    """设备信息随机化的最终执行结果。
+class ChangeSIMResult:
+    """完整 Random & Change SIM Info Only 执行结果。
 
     Attributes:
-        phase_results: 各阶段的执行结果
-        locale: 设备 locale
-        gmail_account: 检测到的 Gmail 账号（空字符串表示未检测到）
+        serial: 设备序列号
+        phase_results: 各阶段的执行结果（不可变元组）
+        mi_dir_path: 探测到的 mi 目录路径
+        third_party_packages: 第三方应用包名列表
         success: 整体是否成功
     """
 
+    serial: str
     phase_results: tuple[PhaseResult, ...] = field(default_factory=tuple)
-    locale: str = ""
-    gmail_account: str = ""
+    mi_dir_path: str = ""
+    third_party_packages: tuple[str, ...] = field(default_factory=tuple)
     success: bool = False
 
     @property

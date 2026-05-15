@@ -25,30 +25,21 @@ pcapng 命令序列（11 阶段 / 333 条命令）：
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 
-from michanger.common import AdbError, AdbExecutor
-from . import account_manager, app_cleaner, prop_modifier, xml_modifier, randomizer
-from .models import ChangeDeviceResult, DeviceProfile, PhaseResult
+from michanger.common import (
+    AdbError,
+    AdbExecutor,
+    DeviceProfile,
+    REMOUNT_RW_PARTITIONS,
+    TWRP_MOUNT_PARTITIONS,
+    load_profile,
+)
+from . import account_manager, app_cleaner, prop_modifier, xml_modifier
+from .models import ChangeDeviceResult, PhaseResult
 
 logger = logging.getLogger(__name__)
-
-# 默认设备配置目录
-_PROFILES_DIR: Path = Path(__file__).resolve().parent / "device_profiles"
-
-# TWRP 挂载分区列表（pcapng 命令 35-41）
-_TWRP_MOUNT_PARTITIONS: tuple[str, ...] = (
-    "/system", "/system_ext", "/vendor",
-    "/product", "/odm", "/persist", "/firmware",
-)
-
-# remount rw 分区列表（pcapng 命令 42-48）
-_REMOUNT_PARTITIONS: tuple[str, ...] = (
-    "/system_root", "/system_ext", "/vendor",
-    "/product", "/odm", "/persist", "/firmware",
-)
 
 # mi_info 清理路径（pcapng 命令 249-255）
 _MI_INFO_CLEANUP_PATHS: tuple[str, ...] = (
@@ -63,80 +54,6 @@ _MI_INFO_CLEANUP_PATHS: tuple[str, ...] = (
 
 # Boot animation 检测超时（秒）
 _BOOT_WAIT_TIMEOUT: float = 180.0
-
-
-def load_profile(name: str | None = None) -> DeviceProfile:
-    """加载设备配置文件，并为可随机化字段生成运行时值。
-
-    以下字段在每次执行时随机生成（基于 7.0 vs 7.0.1 对齐分析）：
-    - timezone:  从预设时区池中随机选择
-    - guid:      UUID v4 随机生成
-    - serial_no: 10 位大写字母+数字随机序列号
-
-    Args:
-        name: 配置名称（不含 .json 后缀），None 则使用默认
-
-    Returns:
-        DeviceProfile 实例（含随机化字段）
-
-    Raises:
-        AdbError: 配置文件不存在或格式错误
-    """
-    if name is None:
-        # 使用目录中的第一个 JSON 文件
-        json_files = sorted(_PROFILES_DIR.glob("*.json"))
-        if not json_files:
-            raise AdbError(f"未找到设备配置文件: {_PROFILES_DIR}")
-        profile_path = json_files[0]
-    else:
-        profile_path = _PROFILES_DIR / f"{name}.json"
-
-    if not profile_path.is_file():
-        raise AdbError(f"设备配置文件不存在: {profile_path}")
-
-    try:
-        with open(profile_path, encoding="utf-8") as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, OSError) as exc:
-        raise AdbError(f"配置文件读取失败: {profile_path}: {exc}") from exc
-
-    # 运行时随机化字段
-    tz = randomizer.random_timezone()
-    guid = randomizer.random_guid()
-    serial = randomizer.random_serial_no()
-    logger.info("随机化: timezone=%s, guid=%s, serial_no=%s", tz, guid, serial)
-
-    return DeviceProfile(
-        device=data["device"],
-        model=data["model"],
-        brand=data["brand"],
-        manufacturer=data["manufacturer"],
-        product=data["product"],
-        board=data["board"],
-        platform=data["platform"],
-        hardware=data["hardware"],
-        build_id=data["build_id"],
-        fingerprint=data["fingerprint"],
-        android_version=data["android_version"],
-        security_patch=data["security_patch"],
-        incremental=data["incremental"],
-        build_date=data["build_date"],
-        build_date_utc=data["build_date_utc"],
-        build_user=data["build_user"],
-        build_host=data["build_host"],
-        build_tags=data["build_tags"],
-        build_type=data["build_type"],
-        timezone=tz,
-        serial_no=serial,
-        guid=guid,
-        mi_tool_version=data["mi_tool_version"],
-        mi_info_data=data["mi_info_data"],
-        config_hash=data["config_hash"],
-        android_id=data["android_id"],
-        cleanup_packages=tuple(data["cleanup_packages"]),
-        extra_cleanup_packages=tuple(data.get("extra_cleanup_packages", [])),
-        system_cleanup_paths=tuple(data["system_cleanup_paths"]),
-    )
 
 
 # ------------------------------------------------------------------
@@ -273,12 +190,12 @@ def _phase5_mount_partitions(adb: AdbExecutor) -> PhaseResult:
     count += 1
 
     # 挂载分区（命令 35-41）
-    for partition in _TWRP_MOUNT_PARTITIONS:
+    for partition in TWRP_MOUNT_PARTITIONS:
         adb.shell(f"twrp mount {partition}")
         count += 1
 
     # remount rw（命令 42-48）
-    for partition in _REMOUNT_PARTITIONS:
+    for partition in REMOUNT_RW_PARTITIONS:
         adb.shell(f"mount -o remount,rw {partition}")
         count += 1
 
@@ -292,7 +209,7 @@ def _phase5_mount_partitions(adb: AdbExecutor) -> PhaseResult:
         phase_name="挂载分区",
         phase_number=5,
         success=True,
-        message=f"已挂载 {len(_TWRP_MOUNT_PARTITIONS)} 个分区",
+        message=f"已挂载 {len(TWRP_MOUNT_PARTITIONS)} 个分区",
         commands_executed=count,
     )
 
@@ -670,7 +587,7 @@ def _dry_run(
         print(f"               → pm clear {pkg}")
 
     print(f"\n  [Phase  4/11] adb reboot recovery")
-    print(f"  [Phase  5/11] twrp mount × {len(_TWRP_MOUNT_PARTITIONS)} 分区")
+    print(f"  [Phase  5/11] twrp mount × {len(TWRP_MOUNT_PARTITIONS)} 分区")
     print(f"  [Phase  6/11] 修改 /prop.default (sed × ~88)")
     print(f"  [Phase  7/11] 修改 5 个 build.prop (sed × ~100)")
     print(f"  [Phase  8/11] 安全属性 × 8 + mi_info 写入")

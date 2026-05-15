@@ -20,13 +20,15 @@ Randomly Change Device — 设备信息随机化模块。
 
 公共 API：
     - randomly_change_device(): 执行完整设备随机化流程
-    - load_profile(): 加载设备配置
     - ChangeDeviceResult: 执行结果数据类
-    - DeviceProfile: 设备配置数据类
+
+    DeviceProfile 和 load_profile 已迁移至 michanger.common：
+    - from michanger.common import DeviceProfile, load_profile
 """
 
-from .models import ChangeDeviceResult, DeviceProfile
-from .randomly_change_device import load_profile, randomly_change_device
+from michanger.common import DeviceProfile, load_profile
+from .models import ChangeDeviceResult
+from .randomly_change_device import randomly_change_device
 
 __all__ = [
     "ChangeDeviceResult",
@@ -34,3 +36,4 @@ __all__ = [
     "load_profile",
     "randomly_change_device",
 ]
+
