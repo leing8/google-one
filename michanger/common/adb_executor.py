@@ -335,6 +335,42 @@ class AdbExecutor:
             timeout=timeout,
         )
 
+    def pull(
+        self,
+        remote_path: str,
+        local_path: Path,
+        *,
+        timeout: float = _PUSH_TIMEOUT,
+    ) -> CommandResult:
+        """从设备拉取文件到本地。
+
+        对应 pcapng 中 sync: → RECV 的 ADB SYNC 协议文件传输。
+        adb pull 命令内部使用相同的 SYNC 协议。
+
+        Args:
+            remote_path: 设备端源文件路径（如 "/data/system/packages.xml"）
+            local_path: 本地保存路径
+            timeout: 超时秒数，默认 300 秒（大文件传输）
+
+        Returns:
+            CommandResult
+
+        Raises:
+            AdbError: adb 进程启动失败或超时
+        """
+        resolved_local = local_path.resolve()
+        resolved_local.parent.mkdir(parents=True, exist_ok=True)
+
+        logger.info(
+            "拉取文件: %s → %s",
+            remote_path,
+            resolved_local,
+        )
+        return self._run(
+            "pull", remote_path, str(resolved_local),
+            timeout=timeout,
+        )
+
     def file_exists(
         self,
         remote_path: str,
