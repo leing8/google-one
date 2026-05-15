@@ -1,0 +1,5 @@
+{
+  "extra_cleanup_packages": [
+    "com.google.android.apps.subscriptions.red"
+  ]
+}
