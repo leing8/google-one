@@ -30,7 +30,7 @@ import logging
 from pathlib import Path
 
 from michanger.common import AdbError, AdbExecutor
-from . import app_cleaner, prop_modifier, xml_modifier
+from . import app_cleaner, prop_modifier, xml_modifier, randomizer
 from .models import ChangeDeviceResult, DeviceProfile, PhaseResult
 
 logger = logging.getLogger(__name__)
@@ -66,13 +66,18 @@ _BOOT_WAIT_TIMEOUT: float = 180.0
 
 
 def load_profile(name: str | None = None) -> DeviceProfile:
-    """加载设备配置文件。
+    """加载设备配置文件，并为可随机化字段生成运行时值。
+
+    以下字段在每次执行时随机生成（基于 7.0 vs 7.0.1 对齐分析）：
+    - timezone:  从预设时区池中随机选择
+    - guid:      UUID v4 随机生成
+    - serial_no: 10 位大写字母+数字随机序列号
 
     Args:
         name: 配置名称（不含 .json 后缀），None 则使用默认
 
     Returns:
-        DeviceProfile 实例
+        DeviceProfile 实例（含随机化字段）
 
     Raises:
         AdbError: 配置文件不存在或格式错误
@@ -95,6 +100,12 @@ def load_profile(name: str | None = None) -> DeviceProfile:
     except (json.JSONDecodeError, OSError) as exc:
         raise AdbError(f"配置文件读取失败: {profile_path}: {exc}") from exc
 
+    # 运行时随机化字段
+    tz = randomizer.random_timezone()
+    guid = randomizer.random_guid()
+    serial = randomizer.random_serial_no()
+    logger.info("随机化: timezone=%s, guid=%s, serial_no=%s", tz, guid, serial)
+
     return DeviceProfile(
         device=data["device"],
         model=data["model"],
@@ -115,9 +126,9 @@ def load_profile(name: str | None = None) -> DeviceProfile:
         build_host=data["build_host"],
         build_tags=data["build_tags"],
         build_type=data["build_type"],
-        timezone=data["timezone"],
-        serial_no=data["serial_no"],
-        guid=data["guid"],
+        timezone=tz,
+        serial_no=serial,
+        guid=guid,
         mi_tool_version=data["mi_tool_version"],
         mi_info_data=data["mi_info_data"],
         config_hash=data["config_hash"],

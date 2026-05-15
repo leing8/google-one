@@ -48,7 +48,6 @@ _GMS_DATA_DIRS: tuple[str, ...] = (
 # 需要在 /data/app/ 下清理的包名（pcapng 命令 289-294）
 _DATA_APP_TARGETS: tuple[str, ...] = (
     "com.android.vending",
-    "com.google.android.gms",
 )
 
 
