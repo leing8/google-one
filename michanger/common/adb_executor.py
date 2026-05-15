@@ -401,6 +401,154 @@ class AdbExecutor:
         return exists
 
     # ------------------------------------------------------------------
+    # APK 安装
+    # ------------------------------------------------------------------
+
+    def install_apk(
+        self,
+        apk_path: Path,
+        *,
+        replace: bool = True,
+        downgrade: bool = True,
+        test: bool = True,
+        user: int = 0,
+        timeout: float = _PUSH_TIMEOUT,
+    ) -> CommandResult:
+        """安装单个 APK 文件。
+
+        等效于 adb install -r -d -t --user 0 <apk>。
+
+        Args:
+            apk_path: APK 文件路径
+            replace: 是否允许覆盖安装（-r）
+            downgrade: 是否允许降级安装（-d）
+            test: 是否允许测试包（-t）
+            user: 安装目标用户 ID（--user）
+            timeout: 超时秒数
+
+        Returns:
+            CommandResult
+
+        Raises:
+            AdbError: APK 文件不存在、adb 进程启动失败或超时
+        """
+        resolved = apk_path.resolve()
+        if not resolved.is_file():
+            raise AdbError(f"APK 文件不存在：{resolved}")
+
+        args: list[str] = ["install"]
+        if replace:
+            args.append("-r")
+        if downgrade:
+            args.append("-d")
+        if test:
+            args.append("-t")
+        args.extend(["--user", str(user)])
+        args.append(str(resolved))
+
+        size_mb = resolved.stat().st_size / (1024 * 1024)
+        logger.info(
+            "安装 APK: %s (%.1f MB)", resolved.name, size_mb,
+        )
+
+        return self._run(*args, timeout=timeout)
+
+    def install_multiple(
+        self,
+        apk_paths: tuple[Path, ...],
+        *,
+        replace: bool = True,
+        downgrade: bool = True,
+        test: bool = True,
+        user: int = 0,
+        timeout: float = _PUSH_TIMEOUT,
+    ) -> CommandResult:
+        """安装多个分割 APK（split APKs）。
+
+        对应 pcapng 中的 exec:cmd package 'install-create/write/commit' 流程。
+        adb install-multiple 命令内部自动执行：
+        1. install-create -r -d -t --user 0 → 创建安装会话
+        2. install-write -S {size} {session} {name}.apk × N → 流式写入每个 APK
+        3. install-commit {session} → 提交安装
+
+        参数 -r -d -t --user 0 与 pcapng 中观察到的参数完全一致：
+        - -r: replace existing application (允许覆盖安装)
+        - -d: allow version code downgrade (允许降级)
+        - -t: allow test packages (允许测试包)
+        - --user 0: install for user 0 (主用户)
+
+        Args:
+            apk_paths: 分割 APK 文件路径元组（base APK 在第一个）
+            replace: 是否允许覆盖安装（-r）
+            downgrade: 是否允许降级安装（-d）
+            test: 是否允许测试包（-t）
+            user: 安装目标用户 ID（--user）
+            timeout: 超时秒数（大文件传输 + 安装需要较长时间）
+
+        Returns:
+            CommandResult
+
+        Raises:
+            AdbError: APK 文件不存在、adb 进程启动失败或超时
+        """
+        # 验证所有 APK 文件存在
+        for apk_path in apk_paths:
+            resolved = apk_path.resolve()
+            if not resolved.is_file():
+                raise AdbError(f"APK 文件不存在：{resolved}")
+
+        # 构建命令参数（参数列表形式，遵循 subprocess 安全最佳实践）
+        args: list[str] = ["install-multiple"]
+        if replace:
+            args.append("-r")
+        if downgrade:
+            args.append("-d")
+        if test:
+            args.append("-t")
+        args.extend(["--user", str(user)])
+
+        # 添加所有 APK 路径
+        for apk_path in apk_paths:
+            args.append(str(apk_path.resolve()))
+
+        total_size = sum(
+            p.resolve().stat().st_size for p in apk_paths
+        )
+        logger.info(
+            "安装 %d 个 split APK (%.1f MB)",
+            len(apk_paths),
+            total_size / (1024 * 1024),
+        )
+
+        return self._run(*args, timeout=timeout)
+
+    def pm_enable(
+        self,
+        package_name: str,
+        *,
+        timeout: float = _DEFAULT_TIMEOUT,
+    ) -> CommandResult:
+        """启用 Android 包。
+
+        对应 pcapng 中的 shell,v2,raw:pm enable {package_name}。
+
+        Args:
+            package_name: Android 包名（如 "com.android.vending"）
+            timeout: 超时秒数
+
+        Returns:
+            CommandResult
+
+        Raises:
+            AdbError: adb 进程启动失败或超时
+        """
+        logger.info("启用包: %s", package_name)
+        return self.shell(
+            f"pm enable {package_name}",
+            timeout=timeout,
+        )
+
+    # ------------------------------------------------------------------
     # 等待设备就绪
     # ------------------------------------------------------------------
 
