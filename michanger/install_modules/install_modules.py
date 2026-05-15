@@ -28,7 +28,7 @@ import logging
 import re
 from pathlib import Path
 
-from common.adb_executor import AdbError, AdbExecutor
+from michanger.common import AdbError, AdbExecutor
 from .models import InstallModulesResult, ModuleInfo, ModuleInstallResult
 
 logger = logging.getLogger(__name__)

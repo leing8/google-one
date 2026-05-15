@@ -1,11 +1,11 @@
 """
 Load Device CLI 入口。
 
-支持 python -m load-device 运行。
+支持 python -m michanger.load_device 运行。
 列出所有已连接的 ADB 设备，并对每台在线设备执行完整探测。
 
 用法：
-    python -m load-device [--adb-path PATH] [-v]
+    python -m michanger.load_device [--adb-path PATH] [-v]
 """
 
 from __future__ import annotations
@@ -15,26 +15,28 @@ import logging
 import sys
 from pathlib import Path
 
+from michanger.common import setup_logging
 from .load_device import load_all_devices
 from .models import LoadDeviceResult
 
 # 默认 adb 路径：项目根目录下的 platform-tools/adb.exe
+# michanger/load_device/__main__.py → 3 级 parent 到项目根
 _DEFAULT_ADB_PATH: Path = (
-    Path(__file__).resolve().parent.parent / "platform-tools" / "adb.exe"
+    Path(__file__).resolve().parent.parent.parent / "platform-tools" / "adb.exe"
 )
 
 
 def _build_parser() -> argparse.ArgumentParser:
     """构建命令行参数解析器。"""
     parser = argparse.ArgumentParser(
-        prog="load-device",
+        prog="michanger.load_device",
         description="Load Device — 列出并探测所有已连接的 Android 设备",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "示例:\n"
-            "  python -m load-device\n"
-            "  python -m load-device --adb-path C:\\tools\\adb.exe\n"
-            "  python -m load-device -v\n"
+            "  python -m michanger.load_device\n"
+            "  python -m michanger.load_device --adb-path C:\\tools\\adb.exe\n"
+            "  python -m michanger.load_device -v\n"
         ),
     )
     parser.add_argument(
@@ -49,21 +51,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="显示详细日志（DEBUG 级别）",
     )
     return parser
-
-
-def _setup_logging(*, verbose: bool) -> None:
-    """配置日志系统。
-
-    Args:
-        verbose: 是否启用 DEBUG 级别日志
-    """
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
-        datefmt="%H:%M:%S",
-        stream=sys.stderr,
-    )
 
 
 def _print_device(index: int, result: LoadDeviceResult) -> None:
@@ -110,7 +97,7 @@ def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
 
-    _setup_logging(verbose=args.verbose)
+    setup_logging(verbose=args.verbose)
     log = logging.getLogger(__name__)
 
     try:

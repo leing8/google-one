@@ -16,27 +16,13 @@ Install Magisk & Root Phone — Android 设备 Magisk 安装模块。
     - install_magisk(): 执行完整 Magisk 安装流程
     - MagiskInstallResult: 安装结果数据类
     - TwrpInfo: TWRP 版本信息数据类
-    - AdbExecutor: ADB 命令执行器
-    - AdbError: ADB 错误异常
-    - list_devices(): 列出已连接 ADB 设备
 """
 
-from .adb_executor import AdbError, AdbExecutor, list_devices
 from .install_magisk import install_magisk
-from .models import (
-    CommandResult,
-    DeviceInfo,
-    MagiskInstallResult,
-    TwrpInfo,
-)
+from .models import MagiskInstallResult, TwrpInfo
 
 __all__ = [
-    "AdbError",
-    "AdbExecutor",
-    "CommandResult",
-    "DeviceInfo",
     "MagiskInstallResult",
     "TwrpInfo",
     "install_magisk",
-    "list_devices",
 ]

@@ -1,12 +1,12 @@
 """
 Install Magisk CLI 入口。
 
-支持 python -m install-magisk 运行。
+支持 python -m michanger.install_magisk 运行。
 在 TWRP Recovery 中安装 Magisk，完成设备 Root。
 
 用法：
-    python -m install-magisk [--adb-path PATH] [--serial SERIAL]
-                             [--magisk-zip PATH] [--dry-run] [-v]
+    python -m michanger.install_magisk [--adb-path PATH] [--serial SERIAL]
+                                       [--magisk-zip PATH] [--dry-run] [-v]
 """
 
 from __future__ import annotations
@@ -16,13 +16,14 @@ import logging
 import sys
 from pathlib import Path
 
-from .adb_executor import AdbError, list_devices
+from michanger.common import AdbError, auto_detect_serial, setup_logging
 from .install_magisk import install_magisk
 from .models import MagiskInstallResult
 
 # 默认 adb 路径：项目根目录下的 platform-tools/adb.exe
+# michanger/install_magisk/__main__.py → 3 级 parent 到项目根
 _DEFAULT_ADB_PATH: Path = (
-    Path(__file__).resolve().parent.parent / "platform-tools" / "adb.exe"
+    Path(__file__).resolve().parent.parent.parent / "platform-tools" / "adb.exe"
 )
 
 # 默认 Magisk.zip 路径：模块目录下的 Magisk.zip
@@ -42,7 +43,7 @@ def _build_parser() -> argparse.ArgumentParser:
     参考：https://docs.python.org/3/library/argparse.html
     """
     parser = argparse.ArgumentParser(
-        prog="install-magisk",
+        prog="michanger.install_magisk",
         description=(
             "Install Magisk & Root Phone — "
             "通过 TWRP Recovery 安装 Magisk，实现设备 Root"
@@ -50,10 +51,10 @@ def _build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "示例：\n"
-            "  python -m install-magisk\n"
-            "  python -m install-magisk --serial ABCD1234\n"
-            "  python -m install-magisk --dry-run\n"
-            "  python -m install-magisk -v\n"
+            "  python -m michanger.install_magisk\n"
+            "  python -m michanger.install_magisk --serial ABCD1234\n"
+            "  python -m michanger.install_magisk --dry-run\n"
+            "  python -m michanger.install_magisk -v\n"
         ),
     )
     parser.add_argument(
@@ -87,73 +88,6 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _setup_logging(*, verbose: bool) -> None:
-    """配置日志系统。
-
-    遵循 Python logging 官方最佳实践：
-    - 使用 logging.basicConfig() 进行简单配置
-    - 日志输出到 stderr（不干扰 stdout 的结构化输出）
-    - 使用 %-style 格式化（logging 推荐）
-
-    参考：https://docs.python.org/3/howto/logging.html
-
-    Args:
-        verbose: 是否启用 DEBUG 级别日志
-    """
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
-        datefmt="%H:%M:%S",
-        stream=sys.stderr,
-    )
-
-
-def _auto_detect_serial(adb_path: Path) -> str:
-    """自动检测第一台在线设备的序列号。
-
-    Args:
-        adb_path: adb 可执行文件路径
-
-    Returns:
-        设备序列号
-
-    Raises:
-        SystemExit: 无在线设备
-    """
-    devices = list_devices(adb_path=adb_path)
-
-    if not devices:
-        print("错误：未检测到已连接的 ADB 设备", file=sys.stderr)
-        sys.exit(1)
-
-    # 优先查找在线设备（state == "device"），其次 Recovery 设备
-    online = [d for d in devices if d.is_online]
-    recovery = [d for d in devices if d.is_recovery]
-
-    if online:
-        serial = online[0].serial
-        print(f"自动检测到在线设备: {serial}", file=sys.stderr)
-        return serial
-
-    if recovery:
-        serial = recovery[0].serial
-        print(
-            f"自动检测到 Recovery 模式设备: {serial}",
-            file=sys.stderr,
-        )
-        return serial
-
-    # 列出所有设备状态
-    for device in devices:
-        print(
-            f"  设备 {device.serial}: {device.state}",
-            file=sys.stderr,
-        )
-    print("错误：无在线或 Recovery 模式的设备", file=sys.stderr)
-    sys.exit(1)
-
-
 def _print_result(result: MagiskInstallResult) -> None:
     """打印安装结果。
 
@@ -180,7 +114,7 @@ def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
 
-    _setup_logging(verbose=args.verbose)
+    setup_logging(verbose=args.verbose)
     log = logging.getLogger(__name__)
 
     # 验证 Magisk.zip 存在
@@ -193,7 +127,9 @@ def main() -> None:
         sys.exit(1)
 
     # 自动检测或使用指定的序列号
-    serial: str = args.serial or _auto_detect_serial(args.adb_path)
+    serial: str = args.serial or auto_detect_serial(
+        args.adb_path, allow_recovery=True,
+    )
 
     try:
         result = install_magisk(

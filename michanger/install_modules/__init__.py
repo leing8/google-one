@@ -22,20 +22,12 @@ Install Modules — Magisk 模块批量安装模块。
     - ModuleInfo: 模块信息数据类
 """
 
-from common.adb_executor import AdbError, AdbExecutor, list_devices
-from common.models import CommandResult, DeviceInfo
-
 from .install_modules import install_modules
 from .models import InstallModulesResult, ModuleInfo, ModuleInstallResult
 
 __all__ = [
-    "AdbError",
-    "AdbExecutor",
-    "CommandResult",
-    "DeviceInfo",
     "InstallModulesResult",
     "ModuleInfo",
     "ModuleInstallResult",
     "install_modules",
-    "list_devices",
 ]

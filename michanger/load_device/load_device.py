@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from .adb_executor import AdbExecutor, list_devices as _list_devices
+from michanger.common import AdbExecutor, list_devices as _list_devices
 from .models import (
     DeviceProperties,
     LoadDeviceResult,

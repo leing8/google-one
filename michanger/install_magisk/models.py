@@ -1,9 +1,8 @@
 """
 Install Magisk 数据模型。
 
-共享模型（CommandResult、DeviceInfo）已迁移至 common.models，
-本文件重新导出以保持向后兼容。
-Magisk 专用模型（TwrpInfo、MagiskInstallResult）仍定义在此处。
+Magisk 安装模块专用模型。
+通用模型（CommandResult、DeviceInfo）请从 michanger.common 导入。
 
 所有模型均使用 frozen=True 保证不可变性（PEP 557）。
 
@@ -14,9 +13,6 @@ Magisk 专用模型（TwrpInfo、MagiskInstallResult）仍定义在此处。
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-# 从 common 重新导出共享模型，保持向后兼容
-from common.models import CommandResult, DeviceInfo  # noqa: F401
 
 
 @dataclass(frozen=True)

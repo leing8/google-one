@@ -25,7 +25,7 @@ import re
 import time
 from pathlib import Path
 
-from .adb_executor import AdbError, AdbExecutor
+from michanger.common import AdbError, AdbExecutor
 from .models import MagiskInstallResult, TwrpInfo
 
 logger = logging.getLogger(__name__)
