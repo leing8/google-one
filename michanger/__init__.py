@@ -15,5 +15,6 @@ MiChanger — Android 设备自动化管理工具集。
     - michanger.random_change_sim_info: SIM 信息随机化（严格还原 14.0-Random & Change SIM Info Only.pcapng）
     - michanger.change_location_only:   位置信息变更（严格还原 15.0-Change Location Only.pcapng）
     - michanger.config_proxy:           设备代理配置（严格还原 16.0-Config Proxy.pcapng）
+    - michanger.clean_all_proxy:        清除全局代理（严格还原 17.0-Clean All Proxy.pcapng）
 """
 
