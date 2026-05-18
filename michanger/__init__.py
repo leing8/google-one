@@ -14,5 +14,6 @@ MiChanger — Android 设备自动化管理工具集。
     - michanger.import_file_to_phone:   文件导入到手机（严格还原 13.0-Import File to Phone.pcapng）
     - michanger.random_change_sim_info: SIM 信息随机化（严格还原 14.0-Random & Change SIM Info Only.pcapng）
     - michanger.change_location_only:   位置信息变更（严格还原 15.0-Change Location Only.pcapng）
+    - michanger.config_proxy:           设备代理配置（严格还原 16.0-Config Proxy.pcapng）
 """
 
