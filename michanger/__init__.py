@@ -17,5 +17,6 @@ MiChanger — Android 设备自动化管理工具集。
     - michanger.config_proxy:           设备代理配置（严格还原 16.0-Config Proxy.pcapng）
     - michanger.clean_all_proxy:        清除全局代理（严格还原 17.0-Clean All Proxy.pcapng）
     - michanger.clear_play_store:       清除 Play Store 数据（严格还原 18.0-Clear Google Play Store.pcapng）
+    - michanger.onoff_screen:           屏幕开关切换（严格还原 19.0-ONOFF Screen.pcapng）
 """
 
