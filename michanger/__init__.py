@@ -13,5 +13,6 @@ MiChanger — Android 设备自动化管理工具集。
     - michanger.wipe_packages_reboot:   包清理与重启（严格还原 11.0-Wipe Packages & Reboot.pcapng）
     - michanger.import_file_to_phone:   文件导入到手机（严格还原 13.0-Import File to Phone.pcapng）
     - michanger.random_change_sim_info: SIM 信息随机化（严格还原 14.0-Random & Change SIM Info Only.pcapng）
+    - michanger.change_location_only:   位置信息变更（严格还原 15.0-Change Location Only.pcapng）
 """
 
